@@ -45,18 +45,18 @@ tutoring_sessions = st.number_input("Tutoring Sessions", min_value=0, value=0)
 learning_disabilities = st.selectbox("Learning Disabilities", ["No", "Yes"])
 
 # ------------------------------
-# Optional features
+# Optional features in expander
 # ------------------------------
-st.subheader("More Factors (Optional)")
 optional_inputs = {}
-for col in all_features:
-    if col in ["Hours_Studied", "Access_to_Resources", "Attendance",
-               "Sleep_Hours", "Tutoring_Sessions", "Learning_Disabilities"]:
-        continue  # already taken
-    if col in categorical_features:
-        optional_inputs[col] = st.selectbox(col, train_df[col].unique())
-    else:
-        optional_inputs[col] = st.number_input(col, value=int(train_df[col].median()))
+with st.expander("More Factors (Optional)"):
+    for col in all_features:
+        if col in ["Hours_Studied", "Access_to_Resources", "Attendance",
+                   "Sleep_Hours", "Tutoring_Sessions", "Learning_Disabilities"]:
+            continue  # already taken
+        if col in categorical_features:
+            optional_inputs[col] = st.selectbox(col, train_df[col].unique())
+        else:
+            optional_inputs[col] = st.number_input(col, value=int(train_df[col].median()))
 
 # ------------------------------
 # Prepare input DataFrame
@@ -69,8 +69,6 @@ input_data = {
     "Tutoring_Sessions": tutoring_sessions,
     "Learning_Disabilities": learning_disabilities
 }
-
-# Add optional features
 input_data.update(optional_inputs)
 
 input_df = pd.DataFrame([input_data])
@@ -80,13 +78,16 @@ for col in categorical_features:
     if col in input_df.columns:
         input_df[col] = pd.Categorical(input_df[col],
                                        categories=train_df[col].unique()).codes
+    else:
+        # If column missing in input, fill with 0
+        input_df[col] = 0
 
-# Ensure all features are present and in correct order
-missing_cols = set(all_features) - set(input_df.columns)
-for col in missing_cols:
-    input_df[col] = 0  # default value for missing features
+# Ensure **all features are present and in the same order as training**
+for col in all_features:
+    if col not in input_df.columns:
+        input_df[col] = 0  # default value for missing features
 
-input_df = input_df[all_features]
+input_df = input_df[all_features]  # reorder columns
 
 # ==============================
 # Prediction
