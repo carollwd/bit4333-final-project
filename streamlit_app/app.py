@@ -9,7 +9,7 @@ from catboost import CatBoostClassifier
 import joblib
 
 # Load cleaned dataset
-df = pd.read_csv("StudentPerformanceFactors_Cleaned.csv")
+df = pd.read_csv("data/StudentPerformanceFactors_Cleaned.csv")
 
 # Separate target
 target_col = "Exam_Score"
