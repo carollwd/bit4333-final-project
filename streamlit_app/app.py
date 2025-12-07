@@ -3,82 +3,39 @@ import pandas as pd
 import numpy as np
 import joblib
 
-st.set_page_config(page_title="Student Performance Predictor", layout="centered")
-
-# ==============================
-# Load models and training column lists
-# ==============================
+# Load models and training features
 reg_model = joblib.load("models/best_reg_model.pkl")
 clf_model = joblib.load("models/best_clf_model.pkl")
-all_lr_training_columns = joblib.load("models/all_lr_training_columns.pkl")
-all_cb_training_columns = joblib.load("models/all_cb_training_columns.pkl")
+all_features = joblib.load("models/all_features.pkl")
 
-# ==============================
-# Load CSV
-# ==============================
-uploaded_file = st.file_uploader("Upload StudentPerformanceFactors_Cleaned.csv", type="csv")
-if uploaded_file is not None:
-    df = pd.read_csv(uploaded_file)
-elif st.button("Use default CSV in data/ folder"):
-    df = pd.read_csv("data/StudentPerformanceFactors_Cleaned.csv")
-else:
-    st.warning("Please upload the CSV file to continue.")
-    st.stop()
+# Load cleaned dataset for dropdowns / defaults
+df = pd.read_csv("data/StudentPerformanceFactors_Cleaned.csv")
+categorical_features = df.select_dtypes(include=['object']).columns.tolist()
 
-# Identify features
-target_col = "Exam_Score"
-all_features = [c for c in df.columns if c != target_col]
+st.title("Student Performance Prediction")
+st.write("Predict exam score and performance class. Fill main features first, optional below.")
 
-categorical_features = [
-    'Access_to_Resources', 'Parental_Involvement', 'Extracurricular_Activities',
-    'Motivation_Level', 'Internet_Access', 'Family_Income', 'Teacher_Quality',
-    'School_Type', 'Peer_Influence', 'Learning_Disabilities',
-    'Parental_Education_Level', 'Distance_from_Home', 'Gender'
-]
-
-numeric_features = [c for c in all_features if c not in categorical_features]
-
-# Main 6 features
-main_features = [
-    "Hours_Studied", "Access_to_Resources", "Attendance",
-    "Sleep_Hours", "Tutoring_Sessions", "Learning_Disabilities"
-]
-
-optional_features = [f for f in all_features if f not in main_features]
-
-# ==============================
-# Streamlit UI
-# ==============================
-st.title("Student Performance Predictor")
-st.write("""
-Predict student's exam score and performance class.
-Main 6 features are required; optional features are under "More Factors".
-""")
-
-# ------------------------------
 # Main 6 inputs
-# ------------------------------
-hours_studied = st.number_input("Hours Studied", min_value=0, max_value=24, value=5)
-access_to_resources = st.selectbox("Access to Resources", df["Access_to_Resources"].unique())
+hours_studied = st.number_input("Hours Studied", 0, 24, 5)
+access_to_resources = st.selectbox("Access to Resources", ["Low","Medium","High"])
 attendance = st.slider("Attendance (%)", 0, 100, 75)
-sleep_hours = st.number_input("Sleep Hours", min_value=0, max_value=24, value=7)
-tutoring_sessions = st.number_input("Tutoring Sessions", min_value=0, value=0)
-learning_disabilities = st.selectbox("Learning Disabilities", df["Learning_Disabilities"].unique())
+sleep_hours = st.number_input("Sleep Hours", 0, 24, 7)
+tutoring_sessions = st.number_input("Tutoring Sessions", 0, 0)
+learning_disabilities = st.selectbox("Learning Disabilities", ["No","Yes"])
 
-# ------------------------------
-# Optional features in expander
-# ------------------------------
-optional_inputs = {}
-with st.expander("More Factors (Optional)"):
-    for col in optional_features:
+# Optional features
+with st.expander("Optional Features"):
+    optional_inputs = {}
+    for col in all_features:
+        if col in ["Hours_Studied","Access_to_Resources","Attendance",
+                   "Sleep_Hours","Tutoring_Sessions","Learning_Disabilities"]:
+            continue
         if col in categorical_features:
             optional_inputs[col] = st.selectbox(col, df[col].unique())
         else:
             optional_inputs[col] = st.number_input(col, value=int(df[col].median()))
 
-# ------------------------------
-# Prepare input DataFrame
-# ------------------------------
+# Prepare input dataframe
 input_data = {
     "Hours_Studied": hours_studied,
     "Access_to_Resources": access_to_resources,
@@ -90,36 +47,29 @@ input_data = {
 input_data.update(optional_inputs)
 input_df = pd.DataFrame([input_data])
 
-# ==============================
-# Prepare input for LinearRegression
-# ==============================
-X_lr = pd.get_dummies(input_df)
-for col in all_lr_training_columns:
-    if col not in X_lr.columns:
-        X_lr[col] = 0
-X_lr = X_lr[all_lr_training_columns]
-
-# ==============================
-# Prepare input for CatBoost
-# ==============================
-X_cb = input_df.copy()
+# Encode categorical features
 for col in categorical_features:
-    if col not in X_cb.columns:
-        X_cb[col] = -1
-X_cb = X_cb[all_cb_training_columns]
+    if col in input_df.columns:
+        input_df[col] = pd.Categorical(input_df[col], categories=df[col].unique()).codes
 
-# ==============================
+# Add missing features
+for col in all_features:
+    if col not in input_df.columns:
+        input_df[col] = 0
+
+# Reorder columns
+input_df = input_df[all_features]
+
 # Prediction
-# ==============================
 if st.button("Predict"):
     try:
-        exam_score = reg_model.predict(X_lr)[0]
-        st.success(f"Predicted Exam Score (Regression): {exam_score:.2f}")
-    except Exception as e:
-        st.error(f"Regression prediction failed: {e}")
+        exam_score = reg_model.predict(input_df)[0]
+        st.success(f"Predicted Exam Score: {exam_score:.2f}")
+    except:
+        st.error("Regression failed")
 
     try:
-        class_pred = clf_model.predict(X_cb)[0]
-        st.success(f"Predicted Performance Class (Classification): {class_pred}")
-    except Exception as e:
-        st.error(f"Classification prediction failed: {e}")
+        class_pred = clf_model.predict(input_df)[0]
+        st.success(f"Predicted Performance Class: {class_pred}")
+    except:
+        st.error("Classification failed")
