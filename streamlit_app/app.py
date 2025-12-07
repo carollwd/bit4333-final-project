@@ -3,12 +3,12 @@ import pandas as pd
 import numpy as np
 import joblib
 
-# Load models and training features
+# Load models and training feature list
 reg_model = joblib.load("models/best_reg_model.pkl")
 clf_model = joblib.load("models/best_clf_model.pkl")
 all_features = joblib.load("models/all_features.pkl")
 
-# Load cleaned dataset for dropdowns / defaults
+# Load cleaned CSV for dropdowns
 df = pd.read_csv("data/StudentPerformanceFactors_Cleaned.csv")
 categorical_features = df.select_dtypes(include=['object']).columns.tolist()
 
@@ -30,10 +30,15 @@ with st.expander("Optional Features"):
         if col in ["Hours_Studied","Access_to_Resources","Attendance",
                    "Sleep_Hours","Tutoring_Sessions","Learning_Disabilities"]:
             continue
-        if col in categorical_features:
-            optional_inputs[col] = st.selectbox(col, df[col].unique())
+        # Only use df values if column exists
+        if col in df.columns:
+            if col in categorical_features:
+                optional_inputs[col] = st.selectbox(col, df[col].unique())
+            else:
+                optional_inputs[col] = st.number_input(col, value=int(df[col].median()))
         else:
-            optional_inputs[col] = st.number_input(col, value=int(df[col].median()))
+            # Safe default for columns not in CSV
+            optional_inputs[col] = 0
 
 # Prepare input dataframe
 input_data = {
