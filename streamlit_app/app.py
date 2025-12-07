@@ -73,21 +73,26 @@ input_data.update(optional_inputs)
 
 input_df = pd.DataFrame([input_data])
 
-# Encode categorical features exactly like training
+# ==============================
+# Encode categorical features like training
+# ==============================
 for col in categorical_features:
     if col in input_df.columns:
-        input_df[col] = pd.Categorical(input_df[col],
-                                       categories=train_df[col].unique()).codes
+        input_df[col] = pd.Categorical(
+            input_df[col],
+            categories=train_df[col].unique()
+        ).codes
     else:
-        # If column missing in input, fill with 0
-        input_df[col] = 0
+        # Missing categorical feature: fill with -1 for CatBoost
+        input_df[col] = -1
 
-# Ensure **all features are present and in the same order as training**
+# ==============================
+# Ensure all features exist and are in correct order
+# ==============================
 for col in all_features:
     if col not in input_df.columns:
-        input_df[col] = 0  # default value for missing features
-
-input_df = input_df[all_features]  # reorder columns
+        input_df[col] = 0  # numeric missing features
+input_df = input_df[all_features]
 
 # ==============================
 # Prediction
