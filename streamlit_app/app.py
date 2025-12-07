@@ -3,71 +3,145 @@ import pandas as pd
 import joblib
 import numpy as np
 
-# Load models, scalers, encoder, and training columns
+# ----------------------------
+# Load data and models
+# ----------------------------
+df = pd.read_csv("models/StudentPerformanceFactors_Cleaned.csv")
+
+# Models
 reg_model = joblib.load("models/best_reg_model.pkl")
 clf_model = joblib.load("models/best_clf_model.pkl")
+
+# Scalers & encoder
 scaler_reg = joblib.load("models/scaler_reg.pkl")
 scaler_clf = joblib.load("models/scaler_clf.pkl")
 le = joblib.load("models/label_encoder.pkl")
-all_cols = joblib.load("models/all_training_columns.pkl")
 
-# Main and optional features
-main_features = ['Hours_Studied', 'Attendance', 'Previous_Scores', 
-                 'Sleep_Hours', 'Tutoring_Sessions', 'Physical_Activity']
+# Columns used during training
+all_training_columns = joblib.load("models/all_training_columns.pkl")
 
-optional_features_options = {
-    'Parental_Involvement': ['Low','Medium','High'],
-    'Access_to_Resources': ['Low','Medium','High'],
-    'Extracurricular_Activities': ['No','Yes'],
-    'Motivation_Level': ['Low','Medium','High'],
-    'Internet_Access': ['No','Yes'],
-    'Family_Income': ['Low','Medium','High'],
-    'Teacher_Quality': ['Low','Medium','High'],
-    'School_Type': ['Public','Private'],
-    'Peer_Influence': ['Negative','Neutral','Positive'],
-    'Learning_Disabilities': ['No','Yes'],
-    'Parental_Education_Level': ['High School','College','Postgraduate'],
-    'Distance_from_Home': ['Near','Moderate','Far'],
-    'Gender': ['Male','Female']
-}
+# ----------------------------
+# App title
+# ----------------------------
+st.title("Student Performance Prediction")
 
-# Streamlit UI
-st.title("Student Performance Predictor")
-st.subheader("Main Features (Required)")
+# ----------------------------
+# Main Features
+# ----------------------------
+st.header("Main Features")
+hours_studied = st.number_input(
+    "Hours Studied (per week)", value=int(df['Hours_Studied'].median())
+)
+attendance = st.number_input(
+    "Attendance (%)", value=int(df['Attendance'].median())
+)
+parental_involvement = st.selectbox(
+    "Parental Involvement", ["Low", "Medium", "High"], index=1
+)
+access_to_resources = st.selectbox(
+    "Access to Resources", ["Low", "Medium", "High"], index=2
+)
+extracurricular_activities = st.selectbox(
+    "Extracurricular Activities", ["No", "Yes"]
+)
+sleep_hours = st.number_input(
+    "Sleep Hours (per day)", value=int(df['Sleep_Hours'].median())
+)
 
-# User inputs for main features
-main_inputs = {col: st.number_input(col, value=0) for col in main_features}
+# ----------------------------
+# Optional Features (collapsed)
+# ----------------------------
+with st.expander("Optional Features"):
+    previous_scores = st.number_input(
+        "Previous Scores (%)", value=int(df['Previous_Scores'].median())
+    )
+    motivation_level = st.selectbox(
+        "Motivation Level", ["Low", "Medium", "High"], index=1
+    )
+    internet_access = st.selectbox(
+        "Internet Access", ["No", "Yes"]
+    )
+    tutoring_sessions = st.number_input(
+        "Tutoring Sessions (per week)", value=int(df['Tutoring_Sessions'].median())
+    )
+    family_income = st.selectbox(
+        "Family Income Level", ["Low", "Medium", "High"], index=1
+    )
+    teacher_quality = st.selectbox(
+        "Teacher Quality", ["Low", "Medium", "High"], index=1
+    )
+    school_type = st.selectbox(
+        "School Type", ["Public", "Private"]
+    )
+    peer_influence = st.selectbox(
+        "Peer Influence", ["Negative", "Neutral", "Positive"], index=1
+    )
+    physical_activity = st.number_input(
+        "Physical Activity (sessions per week)", value=int(df['Physical_Activity'].median())
+    )
+    learning_disabilities = st.selectbox(
+        "Learning Disabilities", ["No", "Yes"]
+    )
+    parental_education_level = st.selectbox(
+        "Parental Education Level", ["High School", "College", "Postgraduate"], index=1
+    )
+    distance_from_home = st.selectbox(
+        "Distance from Home", ["Near", "Moderate", "Far"], index=1
+    )
+    gender = st.selectbox(
+        "Gender", ["Male", "Female"]
+    )
 
-# Optional features in collapsible expander
-optional_inputs = {}
-with st.expander("Optional Features (Click to Expand)"):
-    for col, options in optional_features_options.items():
-        optional_inputs[col] = st.selectbox(col, options)
-
+# ----------------------------
 # Predict button
+# ----------------------------
 if st.button("Predict"):
-    # Build dataframe
-    df_input = pd.DataFrame([{**main_inputs, **optional_inputs}])
+    # Collect input into DataFrame
+    input_dict = {
+        "Hours_Studied": [hours_studied],
+        "Attendance": [attendance],
+        "Parental_Involvement": [parental_involvement],
+        "Access_to_Resources": [access_to_resources],
+        "Extracurricular_Activities": [extracurricular_activities],
+        "Sleep_Hours": [sleep_hours],
+        "Previous_Scores": [previous_scores],
+        "Motivation_Level": [motivation_level],
+        "Internet_Access": [internet_access],
+        "Tutoring_Sessions": [tutoring_sessions],
+        "Family_Income": [family_income],
+        "Teacher_Quality": [teacher_quality],
+        "School_Type": [school_type],
+        "Peer_Influence": [peer_influence],
+        "Physical_Activity": [physical_activity],
+        "Learning_Disabilities": [learning_disabilities],
+        "Parental_Education_Level": [parental_education_level],
+        "Distance_from_Home": [distance_from_home],
+        "Gender": [gender],
+    }
+    input_df = pd.DataFrame(input_dict)
 
-    # Encode categorical features
-    cat_cols = df_input.select_dtypes(include='object').columns
-    df_input_encoded = pd.get_dummies(df_input, columns=cat_cols, drop_first=True)
+    # One-hot encode categorical features
+    input_encoded = pd.get_dummies(input_df)
 
-    # Align columns
-    for col in all_cols:
-        if col not in df_input_encoded.columns:
-            df_input_encoded[col] = 0
-    df_input_encoded = df_input_encoded[all_cols]
+    # Align columns to training
+    for col in all_training_columns:
+        if col not in input_encoded.columns:
+            input_encoded[col] = 0
+    input_encoded = input_encoded[all_training_columns]
 
-    # Scale
-    df_input_scaled_reg = scaler_reg.transform(df_input_encoded)
-    df_input_scaled_clf = scaler_clf.transform(df_input_encoded)
+    # Scale features
+    input_scaled_reg = scaler_reg.transform(input_encoded)
+    input_scaled_clf = scaler_clf.transform(input_encoded)
 
     # Predict
-    pred_reg = reg_model.predict(df_input_scaled_reg)[0]
-    pred_clf_label = le.inverse_transform([clf_model.predict(df_input_scaled_clf)[0]])[0]
+    pred_score = reg_model.predict(input_scaled_reg)[0]
+    pred_class = clf_model.predict(input_scaled_clf)[0]
+    pred_class_label = le.inverse_transform([pred_class])[0]
 
-    # Show results
-    st.subheader("Predictions")
-    st.write(f"Predicted Exam Score: {pred_reg:.2f} / 100")
-    st.write(f"Predicted Performance Grade: {pred_clf_label}")
+    # Clip score to 0-100
+    pred_score = np.clip(pred_score, 0, 100)
+
+    # Display results
+    st.subheader("Prediction Results")
+    st.write(f"Predicted Exam Score: {pred_score:.2f}")
+    st.write(f"Predicted Performance Class: {pred_class_label}")
