@@ -24,14 +24,19 @@ optional_features = ['Parental_Involvement', 'Access_to_Resources',
 st.title("Student Performance Predictor")
 st.subheader("Main Features (Required)")
 main_inputs = {col: st.number_input(col, value=0) for col in main_features}
-st.subheader("Optional Features")
+
+# Optional features inside collapsible expander
 optional_inputs = {}
-for col in optional_features:
-    if col in ['Hours_Studied', 'Attendance', 'Sleep_Hours', 'Previous_Scores',
-               'Tutoring_Sessions', 'Physical_Activity']:
-        optional_inputs[col] = st.number_input(col, value=0)
-    else:
-        optional_inputs[col] = st.selectbox(col, options=['Low','Medium','High','Yes','No','Male','Female'])
+with st.expander("Optional Features (Click to Expand)"):
+    for col in optional_features:
+        # Decide input type based on expected values
+        if col in ['Parental_Involvement','Access_to_Resources','Extracurricular_Activities',
+                   'Motivation_Level','Internet_Access','Family_Income','Teacher_Quality',
+                   'School_Type','Peer_Influence','Learning_Disabilities',
+                   'Parental_Education_Level','Distance_from_Home','Gender']:
+            optional_inputs[col] = st.selectbox(col, options=['Low','Medium','High','Yes','No','Male','Female'])
+        else:  # numeric inputs
+            optional_inputs[col] = st.number_input(col, value=0)
 
 # Build dataframe
 df_input = pd.DataFrame([{**main_inputs, **optional_inputs}])
