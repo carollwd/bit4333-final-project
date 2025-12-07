@@ -1,72 +1,89 @@
+# streamlit_app/app.py
 import streamlit as st
 import pandas as pd
 import joblib
+import numpy as np
 
-# Load dataset
-df = pd.read_csv("models/StudentPerformanceFactors_Cleaned.csv")
-
-# Remove target columns – not used as inputs
-TARGET_COLS = ["Exam_Score", "GradeCategory"]
-df_input = df.drop(columns=TARGET_COLS)
-
-# Detect numerical + categorical columns
-numeric_cols = df_input.select_dtypes(include=["int64", "float64"]).columns.tolist()
-categorical_cols = df_input.select_dtypes(include=["object"]).columns.tolist()
-
-# Load saved preprocessing + models + training columns
-scaler_reg = joblib.load("models/scaler_reg.pkl")
-scaler_clf = joblib.load("models/scaler_clf.pkl")
+# -----------------------------
+# 1. Load models, scaler, encoder
+# -----------------------------
 reg_model = joblib.load("models/best_reg_model.pkl")
 clf_model = joblib.load("models/best_clf_model.pkl")
-training_columns = joblib.load("models/all_training_columns.pkl")
-label_encoder = joblib.load("models/label_encoder.pkl")
+scaler_reg = joblib.load("models/scaler_reg.pkl")
+scaler_clf = joblib.load("models/scaler_clf.pkl")
+le = joblib.load("models/label_encoder.pkl")
+all_cols = joblib.load("models/all_training_columns.pkl")  # full feature list
 
+# -----------------------------
+# 2. Define features
+# -----------------------------
+main_features = ['Hours_Studied', 'Attendance', 'Previous_Scores', 
+                 'Sleep_Hours', 'Tutoring_Sessions', 'Physical_Activity']
+
+optional_features = ['Parental_Involvement', 'Access_to_Resources',
+                     'Extracurricular_Activities', 'Motivation_Level',
+                     'Internet_Access', 'Family_Income', 'Teacher_Quality',
+                     'School_Type', 'Peer_Influence', 'Learning_Disabilities',
+                     'Parental_Education_Level', 'Distance_from_Home', 'Gender']
+
+# -----------------------------
+# 3. User input
+# -----------------------------
 st.title("Student Performance Predictor")
 
-st.write("Enter the student details below:")
+st.subheader("Main Features (Required)")
+main_inputs = {}
+for col in main_features:
+    main_inputs[col] = st.number_input(col, value=0)
 
-# Store user inputs
-user_input = {}
+st.subheader("Optional Features (can skip)")
+optional_inputs = {}
+for col in optional_features:
+    val = 0
+    if col in ['Hours_Studied', 'Attendance', 'Sleep_Hours', 'Previous_Scores',
+               'Tutoring_Sessions', 'Physical_Activity']:
+        val = st.number_input(col, value=0)
+    else:
+        val = st.selectbox(col, options=['Low','Medium','High','Yes','No','Male','Female'])
+    optional_inputs[col] = val
 
-# Numeric fields
-for col in numeric_cols:
-    user_input[col] = st.number_input(
-        col, 
-        value=float(df[col].median())
-    )
+# -----------------------------
+# 4. Build dataframe
+# -----------------------------
+data = {**main_inputs, **optional_inputs}
+df_input = pd.DataFrame([data])
 
-# Categorical dropdowns
-for col in categorical_cols:
-    user_input[col] = st.selectbox(
-        col,
-        df[col].unique().tolist()
-    )
+# -----------------------------
+# 5. Encode categorical
+# -----------------------------
+cat_cols = df_input.select_dtypes(include='object').columns
+df_input_encoded = pd.get_dummies(df_input, columns=cat_cols, drop_first=True)
 
-if st.button("Predict"):
-    try:
-        # Convert inputs to df
-        input_df = pd.DataFrame([user_input])
+# -----------------------------
+# 6. Align with training columns
+# -----------------------------
+for col in all_cols:
+    if col not in df_input_encoded.columns:
+        df_input_encoded[col] = 0  # add missing columns
 
-        # Apply one-hot encoding
-        input_encoded = pd.get_dummies(input_df, columns=categorical_cols, drop_first=True)
+df_input_encoded = df_input_encoded[all_cols]  # reorder
 
-        # Force alignment with training columns
-        for col in training_columns:
-            if col not in input_encoded.columns:
-                input_encoded[col] = 0
+# -----------------------------
+# 7. Scale features
+# -----------------------------
+df_input_scaled_reg = scaler_reg.transform(df_input_encoded)
+df_input_scaled_clf = scaler_clf.transform(df_input_encoded)
 
-        input_encoded = input_encoded[training_columns]
+# -----------------------------
+# 8. Predictions
+# -----------------------------
+pred_reg = reg_model.predict(df_input_scaled_reg)[0]
+pred_clf = clf_model.predict(df_input_scaled_clf)[0]
+pred_clf_label = le.inverse_transform([pred_clf])[0]
 
-        # Run predictions
-        reg_scaled = scaler_reg.transform(input_encoded)
-        clf_scaled = scaler_clf.transform(input_encoded)
-
-        exam_score = reg_model.predict(reg_scaled)[0]
-        grade_pred = clf_model.predict(clf_scaled)[0]
-        final_grade = label_encoder.inverse_transform([grade_pred])[0]
-
-        st.success(f"Predicted Exam Score: {exam_score:.2f}%")
-        st.success(f"Predicted Grade Category: {final_grade}")
-
-    except Exception as e:
-        st.error(f"Prediction failed: {e}")
+# -----------------------------
+# 9. Show results
+# -----------------------------
+st.subheader("Predictions")
+st.write(f"Predicted Exam Score: {pred_reg:.2f} / 100")
+st.write(f"Predicted Performance Grade: {pred_clf_label}")
