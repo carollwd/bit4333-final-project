@@ -4,16 +4,17 @@ import numpy as np
 import joblib
 
 # ==============================
-# Load models
+# Load models and training column lists
 # ==============================
-reg_model_file = "models/best_reg_model.pkl"
-clf_model_file = "models/best_clf_model.pkl"
+reg_model = joblib.load("models/best_reg_model.pkl")
+clf_model = joblib.load("models/best_clf_model.pkl")
 
-reg_model = joblib.load(reg_model_file)
-clf_model = joblib.load(clf_model_file)
+# Load the list of columns your models were trained on
+all_lr_training_columns = joblib.load("models/all_lr_training_columns.pkl")  # LinearRegression
+all_cb_training_columns = joblib.load("models/all_cb_training_columns.pkl")  # CatBoost
 
 # ==============================
-# Load training data CSV for feature reference
+# Load CSV to reference features
 # ==============================
 train_df = pd.read_csv("data/StudentPerformanceFactors_Cleaned.csv")
 
@@ -44,7 +45,6 @@ optional_features = [f for f in all_features if f not in main_features]
 # Streamlit UI
 # ==============================
 st.title("Student Performance Prediction")
-
 st.write("""
 Predict student's exam score and performance classification.
 Main 6 features are required; optional features are under "More Factors".
@@ -87,38 +87,36 @@ input_data.update(optional_inputs)
 input_df = pd.DataFrame([input_data])
 
 # ==============================
-# Encode categorical features exactly like training
+# Prepare input for LinearRegression (one-hot encode categorical features)
 # ==============================
-for col in categorical_features:
-    if col in input_df.columns:
-        input_df[col] = pd.Categorical(
-            input_df[col],
-            categories=train_df[col].unique()
-        ).codes
-    else:
-        input_df[col] = -1  # fill missing categorical features
+X_lr = pd.get_dummies(input_df)
+for col in all_lr_training_columns:
+    if col not in X_lr.columns:
+        X_lr[col] = 0  # missing columns filled with 0
+X_lr = X_lr[all_lr_training_columns]  # reorder columns
 
 # ==============================
-# Ensure all features exist and are in correct order
+# Prepare input for CatBoost (raw categorical features)
 # ==============================
-for col in all_features:
-    if col not in input_df.columns:
-        input_df[col] = 0
-input_df = input_df[all_features]
+X_cb = input_df.copy()
+for col in categorical_features:
+    if col not in X_cb.columns:
+        X_cb[col] = -1
+X_cb = X_cb[all_cb_training_columns]  # reorder columns
 
 # ==============================
 # Prediction
 # ==============================
 if st.button("Predict"):
     try:
-        exam_score = reg_model.predict(input_df)[0]
-        st.success(f"Predicted Exam Score: {exam_score:.2f}")
+        exam_score = reg_model.predict(X_lr)[0]
+        st.success(f"Predicted Exam Score (Regression): {exam_score:.2f}")
     except Exception as e:
         st.error(f"Regression prediction failed: {e}")
 
     try:
-        class_pred = clf_model.predict(input_df)[0]
-        st.success(f"Predicted Performance Class: {class_pred}")
+        class_pred = clf_model.predict(X_cb)[0]
+        st.success(f"Predicted Performance Class (Classification): {class_pred}")
     except Exception as e:
         st.error(f"Classification prediction failed: {e}")
 
